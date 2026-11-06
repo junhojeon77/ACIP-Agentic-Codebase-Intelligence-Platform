@@ -1,0 +1,31 @@
+# Local migration archives and machine-specific state
+/.migration-backups/
+/.aws/
+/.codex/
+/.agents/
+
+# Dependencies and build output
+node_modules/
+.pnpm-store/
+.next/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Local secrets; sanitized examples may be committed
+.env
+.env.*
+!.env.example
+!.env.*.example
