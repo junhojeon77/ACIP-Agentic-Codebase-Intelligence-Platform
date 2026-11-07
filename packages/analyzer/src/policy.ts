@@ -17,6 +17,7 @@ export class FilePolicy {
 
   constructor(readonly root: string) {
     const file = path.join(root, 'acip.config.json');
+    if (this.blocked(file)) throw new Error('acip.config.json must remain inside the repository boundary');
     let value: unknown = {};
     if (fs.existsSync(file)) {
       try { value = JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -28,7 +29,7 @@ export class FilePolicy {
     }
     const config = value as Record<string, unknown>;
     const patterns = (key: string) => {
-      const list = config[key] ?? [];
+      const list = Object.hasOwn(config, key) ? config[key] : [];
       if (!Array.isArray(list)) throw new Error(`acip.config.json: ${key} must be an array`);
       return list.map((pattern: unknown) => {
         if (typeof pattern !== 'string' || !pattern || pattern.startsWith('/') || /^[A-Za-z]:/.test(pattern) ||
@@ -60,7 +61,7 @@ export class FilePolicy {
     if (this.includes.some(pattern => pattern.match(relative))) return false;
     return relative.split('/').some(part => defaults.has(part)) ||
       [...this.outputDirectories].some(dir => file === dir || file.startsWith(dir + path.sep)) ||
-      this.excludes.some(pattern => pattern.match(relative));
+      this.excludes.some(pattern => relative.split('/').some((_, index, parts) => pattern.match(parts.slice(0, index + 1).join('/'))));
   }
   mayReinclude(directory: string): boolean {
     return !this.blocked(directory) && this.includes.some(pattern => pattern.match(this.relative(directory), true));

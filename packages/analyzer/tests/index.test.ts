@@ -7,6 +7,29 @@ import { config, repository, write } from './helpers.js';
 const project = (extra: object = {}) => config({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', jsx: 'preserve' }, include: ['src'], ...extra });
 
 describe('selective project indexing', () => {
+  it('keeps imports in an explicitly selected build configuration without expanding its broader sibling config', () => {
+    const root = repository({
+      'tsconfig.json': config({ include: ['src', 'tests'] }),
+      'tsconfig.build.json': config({ extends: './tsconfig.json', include: ['src'] }),
+      'src/a.ts': 'import "./b"; export function a() {}',
+      'src/b.ts': 'export function b() {}',
+      'tests/unrelated.ts': 'const broken = ;',
+    });
+    const result = indexProject(root, 'tsconfig.build.json');
+    expect(result.projects.map(p => p.id)).toEqual(['tsconfig.build.json']);
+    expect(result.status).toBe('complete');
+  });
+
+  it('applies directory exclusions to explicit file members, while allowing a specific descendant back in', () => {
+    const root = repository({
+      'tsconfig.json': config({ files: ['vendor/skip.ts', 'vendor/keep.ts'] }),
+      'acip.config.json': config({ exclude: ['vendor'], includeExcluded: ['vendor/keep.ts'] }),
+      'vendor/skip.ts': 'export const skip = 1;',
+      'vendor/keep.ts': 'export const keep = 1;',
+    });
+    expect(indexProject(root).projects[0]?.files.map(f => f.path)).toEqual(['vendor/keep.ts']);
+  });
+
   it('follows references, aliases, re-exports, and dynamic imports transitively without parsing unrelated projects', () => {
     const root = repository({
       'apps/web/tsconfig.json': project({ compilerOptions: { module: 'ESNext', moduleResolution: 'Bundler', paths: { '@lib/*': ['../../packages/lib/src/*'] } }, references: [{ path: '../../packages/ref' }] }),
@@ -37,10 +60,10 @@ describe('selective project indexing', () => {
       '.next/types/routes.d.ts': 'declare type Route = "/";',
       '.next/generated.ts': 'export function generated() {}',
       'src/page.tsx': 'import type { Props } from "widget"; export const Page = (props: Props) => <main />;',
-      'src/a.mts': 'import type { A } from "./a.mjs"; export function a() {}',
-      'src/a.d.mts': 'export interface A {}',
-      'src/b.cts': 'import type { B } from "./b.cjs"; export function b() {}',
-      'src/b.d.cts': 'export interface B {}',
+      'src/a.mts': 'import type { A } from "./types.mjs"; export function a() {}',
+      'src/types.d.mts': 'export interface A {}',
+      'src/b.cts': 'import type { B } from "./types.cjs"; export function b() {}',
+      'src/types.d.cts': 'export interface B {}',
       'node_modules/widget/package.json': config({ name: 'widget', types: 'index.d.ts' }),
       'node_modules/widget/index.d.ts': 'export interface Props {}',
     });
