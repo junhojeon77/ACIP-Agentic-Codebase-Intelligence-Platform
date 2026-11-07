@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import { readGit } from './git.js';
 import { diagnosticFromTs } from './extract.js';
 import { compare, FilePolicy, isImplementation, isJavaScript } from './policy.js';
 import type { Diagnostic } from './types.js';
@@ -103,9 +104,12 @@ export function discoverProjects(repository: string) {
   const { root, policy } = workspace;
   const projects = [...workspace.projects.values()].sort((a, b) => compare(a.id, b.id));
   const diagnostics = [...workspace.diagnostics, ...projects.flatMap(project => project.diagnostics)];
+  const git = readGit(root);
+  if (git.error) diagnostics.push({ code: 'GIT_UNAVAILABLE', severity: 'warning', message: git.error });
   return {
     schemaVersion: 1 as const,
     repository: root,
+    git: git.provenance,
     status: diagnostics.some(d => d.severity === 'error') ? 'partial' as const : 'complete' as const,
     projects: projects.map(project => ({
       id: project.id, configPath: project.configPath, references: project.references,

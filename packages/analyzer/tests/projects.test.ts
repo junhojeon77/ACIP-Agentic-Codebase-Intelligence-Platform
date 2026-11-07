@@ -5,6 +5,13 @@ import { discoverProjects } from '../src/projects.js';
 import { config, repository } from './helpers.js';
 
 describe('project discovery', () => {
+  it('rejects analyzer configuration symlinks outside the repository boundary', () => {
+    const outside = repository({ 'config.json': '{}' });
+    const root = repository({});
+    fs.symlinkSync(path.join(outside, 'config.json'), path.join(root, 'acip.config.json'));
+    expect(() => discoverProjects(root)).toThrow(/acip.config.json/);
+  });
+
   it('discovers configurations and custom references without reading implementation files', () => {
     const root = repository({
       'tsconfig.json': config({ files: [], references: [{ path: './packages/lib/custom.json' }] }),
@@ -19,6 +26,7 @@ describe('project discovery', () => {
     const read = vi.spyOn(fs, 'readFileSync');
     try {
       const result = discoverProjects(root);
+      expect(result.git).toEqual({ available: false, headCommit: null, dirty: null });
       expect(result.projects.map(p => p.id)).toEqual(['apps/web/tsconfig.json', 'packages/lib/custom.json', 'tsconfig.json']);
       expect(result.projects.find(p => p.id === 'tsconfig.json')?.references).toEqual(['packages/lib/custom.json']);
       expect(read.mock.calls.some(([file]) => /\.(?:ts|tsx)$/.test(String(file)))).toBe(false);
@@ -64,7 +72,7 @@ describe('project discovery', () => {
     expect(discoverProjects(root).projects).toMatchObject([{ id: '.', configPath: null, files: ['src/a.ts', 'src/x.js'] }]);
   });
 
-  it.each([{ unknown: [] }, { exclude: 3 }, { exclude: ['../private/**'] }, { includeExcluded: ['/absolute'] }, { exclude: ['[broken'] }])('rejects invalid analyzer configuration: %j', value => {
+  it.each([{ unknown: [] }, { exclude: null }, { exclude: 3 }, { exclude: ['../private/**'] }, { includeExcluded: ['/absolute'] }, { exclude: ['[broken'] }])('rejects invalid analyzer configuration: %j', value => {
     const root = repository({ 'acip.config.json': config(value) });
     expect(() => discoverProjects(root)).toThrow(/acip\.config\.json/);
   });
