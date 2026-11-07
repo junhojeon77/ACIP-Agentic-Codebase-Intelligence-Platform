@@ -63,7 +63,7 @@ monorepo root; no additional ACIP directory is required.
 
 | Area | Selected technologies |
 | --- | --- |
-| Frontend | Next.js, React, TypeScript, Tailwind CSS, shadcn/ui; pnpm, ESLint |
+| Frontend | Next.js, React, TypeScript, Tailwind CSS, pnpm, ESLint |
 | APIs and jobs | Python, FastAPI, Pydantic v2, HTTPX, dedicated Python worker; uv, Ruff |
 | Code analysis | TypeScript Compiler API; ts-morph as needed for M2; pnpm, ESLint, TypeScript checks |
 | Persistence | PostgreSQL, pgvector, Alembic |

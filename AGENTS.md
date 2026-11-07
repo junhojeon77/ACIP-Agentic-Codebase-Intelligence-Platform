@@ -149,7 +149,7 @@ into that setup.
 
 ## Selected stack and testing boundaries
 
-- **Frontend and styling:** Next.js, React, TypeScript, Tailwind CSS, and shadcn/ui
+- **Frontend and styling:** Next.js, React, TypeScript, Tailwind CSS
   for the dashboard, repository explorer, and documentation viewer; pnpm, ESLint,
   and TypeScript checks.
   Use Vitest with React Testing Library for component behavior. Use Playwright for
