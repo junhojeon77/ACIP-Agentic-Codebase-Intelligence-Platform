@@ -1,0 +1,27 @@
+{
+  "name": "@acip/analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "acip": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "pnpm build && vitest run",
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "typescript": "6.0.3",
+    "minimatch": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "typescript-eslint": "8.72.1",
+    "vitest": "4.1.12"
+  }
+}
