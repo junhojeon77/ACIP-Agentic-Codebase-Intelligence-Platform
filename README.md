@@ -6,13 +6,10 @@ source evidence. It will track which documentation may be affected when code cha
 
 ## Current status
 
-M1 implementation is in progress. The analyzer test harness is being established;
-no acceptance checks have passed yet. API and web applications remain unimplemented.
-
-This monorepo contains an apps/packages layout, documentation, and development
-instructions only. All milestones below are **planned**. Application scaffolding,
-dependencies, executable checks, workspace tooling, and CI are not yet configured.
-The selected technologies describe the intended architecture, not working features.
+M1 is implemented and its acceptance checks pass. The analyzer CLI can discover
+TypeScript projects and index a selected project with its needed local dependencies.
+The pnpm workspace, compiler build, lint/type checks, and deterministic tests exist.
+M2–M7, the API/web applications, persistence, and CI remain unimplemented.
 
 ## Planned architecture
 
@@ -20,11 +17,9 @@ The platform uses a hybrid Python and TypeScript architecture:
 
 - **API (`apps/api`):** Python services will expose APIs, coordinate AI agents,
   and run background indexing and analysis jobs using analyzer output.
-- **Analyzer (`packages/analyzer`):** An independent TypeScript package will
-  extract native code structure, symbols, source locations, references, and
-  dependencies. M1 starts with a TypeScript CLI accepting a repository path and
-  emitting JSON; the exact schema and Python invocation boundary remain to be
-  implemented.
+- **Analyzer (`packages/analyzer`):** The implemented CLI discovers TypeScript
+  projects and extracts declarations, source locations, and imports into JSON.
+  Cross-symbol relationships and persisted knowledge remain later milestones.
 - **Knowledge storage:** PostgreSQL with pgvector will store repositories,
   symbols, relationships, embeddings, and documentation with source provenance.
 - **Investigation and documentation:** LangGraph will start with one bounded
@@ -55,9 +50,9 @@ AGENTS.md
 ```
 
 This README is the project reference; [AGENTS.md](AGENTS.md) contains development
-instructions for all three components. Empty `.gitkeep` files preserve the
-component directories until source files exist. The current workspace is the
-monorepo root; no additional ACIP directory is required.
+instructions for all three components. Only the analyzer has application code;
+API and web are future component locations. The current workspace is the monorepo
+root; no additional ACIP directory is required.
 
 ## Selected stack
 
@@ -74,56 +69,154 @@ monorepo root; no additional ACIP directory is required.
 
 ## Milestone roadmap
 
-All milestones are **planned**. This is the canonical roadmap, including the
-reasoning, intended implementation, and completion criteria for each milestone.
-The approaches below describe how we plan to build the system, not completed work.
+This is the canonical roadmap. M1 documents the implemented analyzer; M2–M7
+remain **planned**. Each milestone explains the reasoning, implementation approach,
+and completion criteria; planned capabilities are not claims of completed work.
 All milestones also require the applicable checks in [AGENTS.md](AGENTS.md).
 
 ### M1 — Source Code Indexer
 
-**Owner:** `packages/analyzer`. **Technologies:** TypeScript, Compiler API, Vitest.
+**Owner:** `packages/analyzer`. **Technologies:** Node.js 22, TypeScript 6.0.3
+Compiler API, Vitest, ESLint, and minimatch for configured glob patterns.
 
-**What:** Build a CLI that accepts a local repository path and outputs structured
-JSON describing files, named functions, classes, methods, imports, and source
-locations. The intended interaction is an `index` command with a repository-path
-argument; the executable name and exact output contract are not finalized.
+**Status:** Complete for the documented M1 scope. All 45 tests and configured
+checks pass; broader production-repository evaluation belongs to later work.
 
-Illustrative output, not an implemented contract:
+**Why:** Investigation needs trustworthy structural information. Compiler-backed
+parsing avoids false declarations in comments or strings and preserves TypeScript
+project semantics. Discovery is separate from analysis so selecting one app does
+not parse every unrelated project. JSON keeps the analyzer independent of Python
+services, and partial results retain useful evidence without hiding omissions.
+
+**How:** `discoverProjects()` reads project configuration and file metadata;
+`indexProject()` creates compiler Programs only for selected/reachable projects.
+`extractSource()` provides single-file extraction. The CLI wraps these functions,
+records Git provenance with read-only commands, and emits versioned JSON. The
+workspace exposes a binary rather than a pnpm script so `pnpm acip` has no command
+banner mixed into its JSON. No repository code, plugins, or builds are executed.
+
+#### Usage and selection
+
+After installation and build, run from the ACIP workspace root:
+
+```sh
+pnpm acip discover /path/to/repository
+pnpm acip index /path/to/repository --project apps/web/tsconfig.json
+```
+
+Discovery finds `tsconfig*.json` and custom configurations reached through project
+references, without reading implementation source. Project IDs are repository-relative
+config paths. Invalid discovered configs remain visible with diagnostics.
+
+Without `--project`, indexing selects root `tsconfig.json`, otherwise the sole
+project. Multiple candidates require selection. A repository with no config uses
+an in-memory project (`id: "."`) over eligible source files. Valid empty projects
+are supported.
+
+Indexing follows transitive local project references and compiler-resolved imports,
+re-exports, and literal dynamic imports. Each project uses its own compiler options.
+Nearest containing project membership determines imported source ownership; an
+already selected configuration keeps its own files. Otherwise canonical
+`tsconfig.json` wins over same-directory alternatives, and unresolved ownership
+is reported rather than guessed. Cycles terminate; shared files retain separate
+results when explicitly analyzed in multiple project contexts.
+
+#### Supported inputs and exclusions
+
+- Index `.ts`, `.tsx`, `.mts`, and `.cts` implementation files, including named
+  functions, identifier-bound arrow/function expressions, named classes, named
+  class methods, nested declarations, and import specifiers.
+- Use `.d.ts`, `.d.mts`, and `.d.cts` as resolution context, including available
+  dependency and generated declarations. Do not emit them as indexed implementations.
+- Respect inherited TypeScript configurations, source membership, aliases, JSX,
+  module resolution, and project references. Imported local files may enter a
+  Program even when absent from the config's initial include list.
+- Record relevant `.js`, `.jsx`, `.mjs`, and `.cjs` inputs as unsupported omissions;
+  JavaScript implementation indexing is deferred, even when `allowJs` is enabled.
+- By default, skip implementation discovery/indexing in `node_modules`, `.next`,
+  `dist`, `build`, `out`, `coverage`, configured output/declaration directories, and
+  local `.codex`, `.agents`, and `.aws` directories. Declaration resolution remains
+  available independently of these exclusions.
+- Never index outside the canonical repository root, Git metadata, or migration
+  backups. Discovery does not follow directory symlinks. Compiler-resolved workspace
+  links may refer to implementation source inside the repository.
+
+Optional repository-root `acip.config.json`:
 
 ```json
 {
-  "repository": "./my-nextjs-app",
-  "files": [
-    {
-      "path": "src/auth.ts",
-      "symbols": [
-        {
-          "name": "authenticate",
-          "kind": "function",
-          "startLine": 3,
-          "endLine": 5
-        }
-      ],
-      "imports": ["./database"]
-    }
-  ]
+  "exclude": ["vendor/**"],
+  "includeExcluded": ["packages/example/dist/**"]
 }
 ```
 
-**Why:** Investigation needs trustworthy structural information. Deterministic
-lookup tools let an agent find declarations and relationships without depending
-on guesses from an entire repository placed in a prompt.
+Only these two string-array fields are accepted. Patterns use repository-relative,
+forward-slash glob syntax. `exclude` adds exclusions; matching a directory excludes
+its descendants. `includeExcluded` overrides default/custom exclusions for matching
+paths, but never protected boundaries, unsupported extensions, or TypeScript project
+membership. Absolute paths, parent traversal, negation, backslashes, control
+characters, and unbalanced bracket/brace patterns are rejected. Malformed analyzer
+configuration is fatal. Re-including large dependency trees can make discovery costly.
 
-**How:** Start with individual TypeScript AST parsing, then load a project through
-its `tsconfig.json` and the compiler's `Program` abstraction. Define the JSON
-contract for Python consumers during M1. Start with TypeScript fixtures; broader
-language support needs an explicit requirement.
+#### JSON contract and errors
 
-**Pass criteria:** Fixtures correctly identify named functions, classes, methods,
-and imports with accurate source locations. Comments and strings do not produce
-false declarations; generated output and dependency directories are excluded.
-Malformed input produces clear diagnostics, and analyzer/Python contract checks
-verify compatibility as the consumer boundary is introduced.
+Both commands emit `schemaVersion: 1`, `repository` (canonical absolute root),
+`status` (`complete` or `partial`), `git`, `projects`, `diagnostics`, and `omissions`.
+Paths and project IDs inside results are repository-relative with forward slashes.
+
+| Record | Fields and meaning |
+| --- | --- |
+| Discovery project | `id`, nullable `configPath`, `references`, and config-member `files` (which may include declarations used for resolution) |
+| Indexed project | `id`, nullable `configPath`, `status`, local project `dependencies`, and implementation `files` |
+| Indexed file | `path`, `status`, nullable SHA-256 `contentHash`, `gitState`, `symbols`, `imports`, and file `diagnostics` |
+| Symbol | `name`, `kind` (`function`, `class`, `method`), one-based inclusive `startLine`/`endLine`, excluding leading comments and trailing whitespace |
+| Import | Raw `specifier` and one-based inclusive `startLine`/`endLine` |
+| Diagnostic | `code`, `severity`, `message`, with `project`, `path`, `line`, and `column` where available |
+| Omission | `reason`, `affectsCompleteness`, and `project`, `path`, `specifier`, or originating `from` file where known |
+| Git provenance | `available`, nullable baseline `headCommit`, and nullable `dirty` state |
+
+Projects/files and aggregate diagnostics/omissions are sorted deterministically;
+symbols/imports retain source order. No source excerpts are emitted. The TypeScript
+interfaces are exported from the analyzer's built entry point; the Python consumer
+smoke test reads actual CLI JSON without requiring an API service.
+
+Malformed source retains recoverable declarations with real names and spans, but
+its file is marked partial. Recovery is not proof that the source is valid.
+Unreadable files have no symbols and a null hash. Broken dependency configs,
+missing declarations, unresolved imports, ambiguous ownership, and unsupported
+required source produce diagnostics or omissions and partial results. Expected
+exclusions and declaration-only context do not alone make a run partial.
+
+Completed full **and partial** runs return exit code `0`; consumers must inspect
+`status` and `affectsCompleteness`. Invalid arguments, unreadable repository roots,
+invalid analyzer configuration, and unusable selected project configurations return
+`1` with a concise stderr error and no JSON. Successful output uses stdout only.
+
+#### Working-tree provenance and limits
+
+`headCommit` identifies the baseline, not an assertion that all indexed bytes came
+from that commit. Each emitted file hashes the exact bytes parsed and records
+`tracked-clean`, `modified`, `untracked`, `ignored`, or `unknown` Git state. Git HEAD
+and working-tree status are checked before/after indexing; implementation hashes
+are rechecked. Detected changes produce partial consistency diagnostics; a changed Git baseline
+marks file provenance unknown rather than attributing new bytes to the old HEAD. A normal
+working tree is not an atomic snapshot, even when these checks find no change.
+
+Non-Git repositories have unavailable provenance and null revision/dirty values.
+If Git cannot run, indexing still works and records a warning. Git optional locks,
+filesystem-monitor helpers, and hooks are disabled. Inspection does not install
+dependencies or generate missing Next.js declarations; those gaps remain explicit.
+
+M1 does not resolve call graphs, prove runtime behavior, enforce full semantic type
+correctness, support arbitrary computed/anonymous declarations, index selected
+commit snapshots, or provide watch mode, caching, AI, persistence, or a UI.
+
+**Verification:** Tests cover extraction and recovery, Next.js-style TSX/declarations,
+config inheritance/exclusions, selective dependency traversal and cycles, overlapping
+projects, local links, unsupported inputs, CLI/Python contracts, and disposable Git
+repositories. The target fixtures are checked for unwanted modifications. Each
+behavior group was introduced with observed failing tests before implementation;
+final check results are recorded in the command reference below.
 
 ### M2 — Code Knowledge Graph
 
@@ -316,15 +409,40 @@ Keep their checks explicit rather than collapsing them into one large LLM prompt
 
 ## Setup and contributing
 
-No setup or execution commands are verified yet. As scaffolding is introduced,
-maintain the command reference here, grouped by component, with actual working
-directories and required environment variable names without secrets.
+Prerequisites: Node.js 22.12+ within the 22.x line, pnpm 10.33.4, Git for revision
+provenance, and Python 3 for the consumer-contract test. No environment variables
+or API credentials are required for M1.
 
-| Component | Commands to document once configured | Current status |
-| --- | --- | --- |
-| Web (`apps/web`) | Install, development server, build, component/browser tests, lint, type checks | Not configured |
-| API (`apps/api`) | Install, service/worker startup, migrations, tests, lint, configured type checks | Not configured |
-| Analyzer (`packages/analyzer`) | Install, build, analysis invocation, tests, lint, type checks | Not configured |
+Run these commands from the ACIP workspace root:
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm install --frozen-lockfile --ignore-scripts` | Install the locked workspace dependencies without lifecycle scripts |
+| `pnpm build` | Compile the analyzer and emit public TypeScript declarations |
+| `pnpm test` | Build, then run the full Vitest suite including Git, CLI, and Python checks |
+| `pnpm lint` | Check analyzer source, tests, and CLI launcher with ESLint |
+| `pnpm typecheck` | Check analyzer source and TypeScript tests without emitting |
+| `pnpm acip discover <repository>` | List projects and configuration diagnostics as JSON |
+| `pnpm acip index <repository> --project <config-path>` | Index a project and its needed local dependencies as JSON |
+
+Build before running the CLI; tests build automatically to prevent stale CLI tests.
+Install dependencies only for ACIP itself, never automatically for analyzed targets.
+The lockfile is versioned. The analyzer package also exposes `build`, `test`, `lint`,
+and `typecheck` scripts through `pnpm --filter @acip/analyzer <script>`.
+API/web service commands and database migrations are not configured.
+
+Verified on 2026-11-07:
+
+- `pnpm install --offline --frozen-lockfile --ignore-scripts` passed using the local cache.
+- `pnpm test` passed all 45 tests, including the compiled CLI and Python consumer.
+- `pnpm lint`, `pnpm typecheck`, and `pnpm build` passed; tests also rebuild the CLI.
+- `pnpm acip discover .` returned both analyzer configurations with no errors.
+- `pnpm acip index . --project packages/analyzer/tsconfig.build.json` returned
+  a complete index of seven implementation files, no test files, valid Git
+  provenance, and no diagnostics or completeness-affecting omissions.
+
+Fresh-session instruction discovery has not been checked. In this environment, tests that spawn Git, Node, or Python require
+execution outside the restricted sandbox; ordinary test fixtures remain local.
 
 Follow [AGENTS.md](AGENTS.md) for the red → green → refactor workflow,
 component-specific guidance, test boundaries, and completion checks. The

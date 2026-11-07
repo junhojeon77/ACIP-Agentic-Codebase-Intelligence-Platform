@@ -26,15 +26,17 @@ assumptions with code and tests.
 
 ## Current state and commands
 
-M1 implementation is in progress. The analyzer test harness is being established;
-no acceptance checks have passed yet. API and web applications remain unimplemented.
+M1 is implemented and verified: 45 tests, lint, type checking, build, a frozen
+lockfile installation, and self-indexing smoke checks pass. API/web applications,
+persistence, and CI remain unimplemented. Do not treat the rest of the selected
+stack as installed. Fresh-session instruction discovery remains unverified.
 
-This project currently has an apps/packages layout, documentation, and instructions
-only. The stack below is selected, but application scaffolding, dependencies,
-workspace tooling, executable checks, and CI are not yet configured. Do not treat
-the technology list as evidence that tooling exists.
+Run analyzer checks from the workspace root: `pnpm test`, `pnpm lint`,
+`pnpm typecheck`, and `pnpm build`. Tests build first and include local Git and
+Python-consumer checks. These subprocess checks require sandbox escalation in the
+current environment. No environment variables or live services are required.
 
-When scaffolding is added, maintain verified setup, service, migration, build,
+Maintain verified setup, service, migration, build,
 analysis, test, lint, and type-check commands in the root
 [README command reference](README.md#setup-and-contributing), grouped by component
 with working directories and required environment variable names, never secrets.
@@ -44,7 +46,8 @@ checks as passing.
 ## Roadmap and component guidance
 
 Use the [canonical M1–M7 roadmap](README.md#milestone-roadmap) for ownership,
-deliverables, and completion criteria. All milestones are planned. Implement only
+deliverables, and completion criteria. M1 is complete for its documented scope;
+M2–M7 are planned. Implement only
 the current requirement; the roadmap does not authorize speculative features or
 infrastructure. These root instructions apply to all three component directories.
 
@@ -54,8 +57,8 @@ infrastructure. These root instructions apply to all three component directories
   and Git/GitHub integration. Consume analysis output from `packages/analyzer`;
   keep AST extraction and native relationship analysis in that package.
 - Test API validation, response contracts, and async error paths. Verify the
-  analyzer/Python contract as implemented; define its schema and transport during
-  M1 rather than introducing a speculative interface or service process.
+  analyzer/Python JSON contract as implemented; consume the CLI boundary rather
+  than introducing a speculative interface or service process.
 - Add job retries and duplicate side-effect protection where required by actual
   behavior, with deterministic failure and transition tests.
 - Associate stored symbols, relationships, and claim evidence with analyzed
@@ -96,10 +99,19 @@ infrastructure. These root instructions apply to all three component directories
 - Own AST extraction, symbols, source locations, and subsequent source relationship
   analysis. Keep the package independent of API and web implementations; do not
   put persistence, agent orchestration, GitHub integration, or UI code here.
-- Start M1 with a TypeScript CLI that accepts a repository path and emits JSON.
-  Begin with individual AST parsing, then load `tsconfig.json` through the compiler's
-  `Program` abstraction. Define the exact output contract and Python invocation
-  boundary during implementation; broader languages require an explicit need.
+- Maintain `discoverProjects()` and `indexProject()` and the `acip discover/index`
+  CLI. Discovery reads configuration/metadata; index only selected projects and
+  reachable local dependencies with their own compiler options. Preserve selected
+  build configurations instead of expanding broader sibling configs unnecessarily.
+- Keep the versioned JSON contract documented in the root README and verify it
+  through actual CLI output consumed by Python. Successful partial runs exit `0`;
+  consumers must inspect status, diagnostics, and omissions. Fatal requests exit `1`.
+- Index TypeScript implementation variants; use declaration files only for
+  resolution. JavaScript implementation support remains deferred. Preserve
+  exclusions/re-inclusions without overriding protected repository boundaries.
+- Preserve exact-byte hashes, baseline HEAD, and per-file Git state. Recoverable
+  declarations and working-tree changes must not be represented as verified
+  revision-backed evidence. Never execute target plugins, scripts, or builds.
 - Preserve source provenance. Verify named functions, classes, methods, imports,
   and accurate locations without false declarations from comments or strings;
   exclude generated output and dependency directories. Add no schema framework
