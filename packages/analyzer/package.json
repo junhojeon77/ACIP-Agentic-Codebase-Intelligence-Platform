@@ -6,12 +6,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "acip": "dist/cli.js"
+    "acip": "bin/acip.mjs"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "pnpm build && vitest run",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests bin",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

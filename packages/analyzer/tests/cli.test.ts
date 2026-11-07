@@ -9,6 +9,16 @@ const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
 
 describe('built CLI', () => {
+  it('keeps the root pnpm acip command machine-readable', () => {
+    const root = repository({ 'a.ts': 'export function a() {}' });
+    const result = spawnSync('pnpm', ['acip', 'index', root], {
+      cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8',
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).status).toBe('complete');
+    expect(result.stderr).toBe('');
+  });
+
   it('prints only deterministic JSON for discovery and indexing, without modifying source', () => {
     const root = repository({ 'tsconfig.json': config({ files: ['a.ts'] }), 'a.ts': 'export function a() {}' });
     const before = fs.readFileSync(path.join(root, 'a.ts'));

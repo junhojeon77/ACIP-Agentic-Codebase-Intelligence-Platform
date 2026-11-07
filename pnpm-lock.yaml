@@ -6,7 +6,11 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@acip/analyzer':
+        specifier: workspace:*
+        version: link:packages/analyzer
 
   packages/analyzer:
     dependencies:

@@ -2,12 +2,16 @@
   "name": "acip",
   "private": true,
   "packageManager": "pnpm@10.33.4",
-  "engines": { "node": ">=22.12.0 <23" },
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
   "scripts": {
     "build": "pnpm --filter @acip/analyzer build",
     "test": "pnpm --filter @acip/analyzer test",
     "lint": "pnpm --filter @acip/analyzer lint",
-    "typecheck": "pnpm --filter @acip/analyzer typecheck",
-    "acip": "node packages/analyzer/dist/cli.js"
+    "typecheck": "pnpm --filter @acip/analyzer typecheck"
+  },
+  "devDependencies": {
+    "@acip/analyzer": "workspace:*"
   }
 }
