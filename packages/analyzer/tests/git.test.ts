@@ -17,6 +17,24 @@ function initialize(root: string) {
 function commit(root: string) { git(root, 'add', '.'); git(root, 'commit', '-qm', 'fixture'); return git(root, 'rev-parse', 'HEAD'); }
 
 describe('Git provenance', () => {
+  it('does not label newly captured bytes as clean at the old HEAD if Git changes before the read', () => {
+    const root = repository({ 'a.ts': 'export function before() {}' }); initialize(root); const initial = commit(root);
+    const originalRead = fs.readFileSync;
+    let changed = false;
+    const read = vi.spyOn(fs, 'readFileSync').mockImplementation((...args: Parameters<typeof fs.readFileSync>) => {
+      if (!changed && String(args[0]) === path.join(root, 'a.ts')) {
+        changed = true;
+        write(root, 'a.ts', 'export function after() {}'); commit(root);
+      }
+      return originalRead(...args);
+    });
+    try {
+      const result = indexProject(root);
+      expect(result.git.headCommit).toBe(initial);
+      expect(result.projects[0]?.files[0]).toMatchObject({ status: 'partial', gitState: 'unknown', symbols: [expect.objectContaining({ name: 'after' })] });
+    } finally { read.mockRestore(); }
+  });
+
   it('records a clean baseline and hashes the exact indexed bytes without changing the repository', () => {
     const text = 'export function café() {}\r\n';
     const root = repository({ 'a.ts': text });
