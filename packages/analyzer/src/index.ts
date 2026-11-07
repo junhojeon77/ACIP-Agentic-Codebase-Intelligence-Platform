@@ -37,6 +37,7 @@ export function indexProject(repository: string, projectId?: string): IndexResul
     if (!candidates.length) return current;
     const deepest = Math.max(...candidates.map(p => p.directory.length));
     const nearest = candidates.filter(p => p.directory.length === deepest);
+    if (nearest.includes(current)) return current;
     const canonical = nearest.filter(p => p.configPath && path.basename(p.configPath) === 'tsconfig.json');
     return canonical.length === 1 ? canonical[0]! : nearest.length === 1 ? nearest[0]! : 'ambiguous';
   };
@@ -174,15 +175,17 @@ export function indexProject(repository: string, projectId?: string): IndexResul
     result.dependencies.sort(compare);
   }
   const orderedProjects = [...results.values()].sort((a, b) => compare(a.id, b.id));
-  const finalGit = readGit(root);
-  if (initialGit.signature !== finalGit.signature || initialGit.provenance.available !== finalGit.provenance.available) {
+  const finalGit = readGit(root, orderedProjects.flatMap(project => project.files.map(file => path.join(root, file.path))));
+  const gitChanged = initialGit.signature !== finalGit.signature || initialGit.provenance.available !== finalGit.provenance.available;
+  if (gitChanged) {
     diagnostics.push({ code: 'GIT_CHANGED', severity: 'error', message: 'Git HEAD or working-tree state changed during indexing; results are not an immutable snapshot' });
     for (const result of orderedProjects) result.status = 'partial';
   }
   for (const result of orderedProjects) {
     for (const file of result.files) {
       const absolute = path.join(root, file.path);
-      file.gitState = initialGit.states.get(absolute) ?? (initialGit.provenance.available ? 'untracked' : 'unknown');
+      file.gitState = initialGit.states.get(absolute) ?? (finalGit.states.get(absolute) === 'ignored' ? 'ignored' : initialGit.provenance.available ? 'untracked' : 'unknown');
+      if (gitChanged) { file.gitState = 'unknown'; file.status = 'partial'; }
       if (file.contentHash === null) continue;
       let currentHash: string | null = null;
       try { currentHash = hashContent(fs.readFileSync(absolute)); } catch { /* A disappeared file is a consistency failure. */ }
