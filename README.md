@@ -6,6 +6,9 @@ source evidence. It will track which documentation may be affected when code cha
 
 ## Current status
 
+M1 implementation is in progress. The analyzer test harness is being established;
+no acceptance checks have passed yet. API and web applications remain unimplemented.
+
 This monorepo contains an apps/packages layout, documentation, and development
 instructions only. All milestones below are **planned**. Application scaffolding,
 dependencies, executable checks, workspace tooling, and CI are not yet configured.

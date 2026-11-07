@@ -26,6 +26,9 @@ assumptions with code and tests.
 
 ## Current state and commands
 
+M1 implementation is in progress. The analyzer test harness is being established;
+no acceptance checks have passed yet. API and web applications remain unimplemented.
+
 This project currently has an apps/packages layout, documentation, and instructions
 only. The stack below is selected, but application scaffolding, dependencies,
 workspace tooling, executable checks, and CI are not yet configured. Do not treat
