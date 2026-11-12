@@ -31,7 +31,12 @@ identities and relationship occurrences; discovery remains v1. On 2026-11-11,
 58 tests, lint, type checking, build, frozen-lockfile installation, and self-indexing
 smoke checks passed. Windows baseline path/fixture failures were repaired without
 skipping tests; Windows uses junctions for canonical-boundary fixtures while POSIX
-retains file-symlink coverage. M2 persistence/queries, API/web applications, and CI remain
+retains file-symlink coverage. The supported Node ranges are 22.12+ within 22.x
+and 24.11+ within 24.x, with pnpm 10.33.4. On 2026-11-11, the same checks passed
+on Windows with Node 24.11.0 after extending the root engine range; the existing
+CLI JSON regression observed red-to-green without weakening its assertions.
+Node 22 verification remains historical and was not rerun for that change.
+M2 persistence/queries, API/web applications, and CI remain
 unimplemented. Do not treat the rest of the selected stack as installed.
 Fresh-session instruction discovery remains unverified.
 

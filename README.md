@@ -77,7 +77,7 @@ All milestones also require the applicable checks in [AGENTS.md](AGENTS.md).
 
 ### M1 — Source Code Indexer
 
-**Owner:** `packages/analyzer`. **Technologies:** Node.js 22, TypeScript 6.0.3
+**Owner:** `packages/analyzer`. **Technologies:** Node.js 22/24, TypeScript 6.0.3
 Compiler API, Vitest, ESLint, and minimatch for configured glob patterns.
 
 **Status:** Complete for the documented M1 scope. All 45 tests and configured
@@ -451,9 +451,9 @@ Keep their checks explicit rather than collapsing them into one large LLM prompt
 
 ## Setup and contributing
 
-Prerequisites: Node.js 22.12+ within the 22.x line, pnpm 10.33.4, Git for revision
-provenance, and Python 3 for the consumer-contract test. No environment variables
-or API credentials are required for M1.
+Prerequisites: Node.js 22.12+ within the 22.x line or 24.11+ within the 24.x line,
+pnpm 10.33.4, Git for revision provenance, and Python 3 for the consumer-contract
+test. No environment variables or API credentials are required for M1.
 
 Run these commands from the ACIP workspace root:
 
@@ -495,6 +495,21 @@ Analyzer M2 verification on 2026-11-11 using Node 22.16.0 and pnpm 10.33.4:
 - `pnpm acip discover .` returned schema v1 and two projects with complete status;
   `pnpm acip index . --project packages/analyzer/tsconfig.build.json` returned
   schema v2 with complete status and no diagnostics.
+
+Node 24 compatibility verification on 2026-11-11 using Node 24.11.0 and pnpm 10.33.4:
+
+- The existing root CLI JSON regression first failed because the Node 22-only
+  engine range caused pnpm to prefix stdout with an unsupported-engine warning.
+  Adding the supported Node 24 range fixed the regression without changing CLI
+  output handling, assertions, dependencies, or the pnpm version.
+- `pnpm install --frozen-lockfile --ignore-scripts`, `pnpm test` (58 tests),
+  `pnpm lint`, `pnpm typecheck`, and `pnpm build` passed on Windows; commands
+  were invoked through `pnpm.cmd` from PowerShell.
+- `pnpm acip discover .` and
+  `pnpm acip index . --project packages/analyzer/tsconfig.build.json` emitted
+  parseable JSON with schema v1/v2 respectively, complete status, no diagnostics,
+  and empty stderr. Node 22 was not rerun during this compatibility change; its
+  verification above remains historical.
 
 Windows baseline failures were repaired by normalizing TypeScript config paths
 and filesystem output-directory comparisons, invoking the real pnpm script
