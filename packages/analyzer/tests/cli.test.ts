@@ -11,7 +11,9 @@ const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], {
 describe('built CLI', () => {
   it('keeps the root pnpm acip command machine-readable', () => {
     const root = repository({ 'a.ts': 'export function a() {}' });
-    const result = spawnSync('pnpm', ['acip', 'index', root], {
+    const pnpm = process.env.npm_execpath;
+    expect(pnpm, 'Run the CLI contract through pnpm test').toBeTruthy();
+    const result = spawnSync(process.execPath, [pnpm!, 'acip', 'index', root], {
       cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8',
     });
     expect(result.status, result.stderr).toBe(0);
@@ -36,7 +38,11 @@ describe('built CLI', () => {
   });
 
   it('returns successful partial JSON consumed by Python without starting an API service', () => {
-    const root = repository({ 'a.ts': 'export function a() {}\nconst broken = ;', 'helper.js': 'export const js = 1;' });
+    const root = repository({
+      'a.ts': 'export function a() {}\nconst broken = ;', 'helper.js': 'export const js = 1;',
+      'auth.ts': 'import { findUser } from "./database"; export function authenticate(cb: () => void) { findUser(); cb(); }',
+      'database.ts': 'export function findUser() {}',
+    });
     const result = run('index', root);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');

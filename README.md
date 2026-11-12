@@ -6,10 +6,11 @@ source evidence. It will track which documentation may be affected when code cha
 
 ## Current status
 
-M1 is implemented and its acceptance checks pass. The analyzer CLI can discover
-TypeScript projects and index a selected project with its needed local dependencies.
-The pnpm workspace, compiler build, lint/type checks, and deterministic tests exist.
-M2–M7, the API/web applications, persistence, and CI remain unimplemented.
+M1 and the analyzer slice of M2 are implemented. The CLI discovers TypeScript
+projects and indexes a selected project with its needed local dependencies,
+including symbol identities, imports, references, and static calls. M2 persistence
+and queries, M3–M7, API/web applications, and CI remain unimplemented. Current
+validation results and known Windows baseline failures are recorded below.
 
 ## Planned architecture
 
@@ -18,8 +19,8 @@ The platform uses a hybrid Python and TypeScript architecture:
 - **API (`apps/api`):** Python services will expose APIs, coordinate AI agents,
   and run background indexing and analysis jobs using analyzer output.
 - **Analyzer (`packages/analyzer`):** The implemented CLI discovers TypeScript
-  projects and extracts declarations, source locations, and imports into JSON.
-  Cross-symbol relationships and persisted knowledge remain later milestones.
+  projects and extracts declarations, source locations, and relationships into JSON.
+  Persisted knowledge remains planned.
 - **Knowledge storage:** PostgreSQL with pgvector will store repositories,
   symbols, relationships, embeddings, and documentation with source provenance.
 - **Investigation and documentation:** LangGraph will start with one bounded
@@ -60,7 +61,7 @@ root; no additional ACIP directory is required.
 | --- | --- |
 | Frontend | Next.js, React, TypeScript, Tailwind CSS, pnpm, ESLint |
 | APIs and jobs | Python, FastAPI, Pydantic v2, HTTPX, dedicated Python worker; uv, Ruff |
-| Code analysis | TypeScript Compiler API; ts-morph as needed for M2; pnpm, ESLint, TypeScript checks |
+| Code analysis | TypeScript Compiler API; pnpm, ESLint, TypeScript checks |
 | Persistence | PostgreSQL, pgvector, Alembic |
 | AI | LangGraph, OpenAI API for explanations, documentation, and embeddings |
 | Documentation output | Pydantic claim validation, Markdown, Mermaid |
@@ -69,8 +70,8 @@ root; no additional ACIP directory is required.
 
 ## Milestone roadmap
 
-This is the canonical roadmap. M1 documents the implemented analyzer; M2–M7
-remain **planned**. Each milestone explains the reasoning, implementation approach,
+This is the canonical roadmap. M1 and M2's analyzer slice are implemented; M2
+persistence/queries and M3–M7 remain **planned**. Each milestone explains the reasoning, implementation approach,
 and completion criteria; planned capabilities are not claims of completed work.
 All milestones also require the applicable checks in [AGENTS.md](AGENTS.md).
 
@@ -160,7 +161,8 @@ configuration is fatal. Re-including large dependency trees can make discovery c
 
 #### JSON contract and errors
 
-Both commands emit `schemaVersion: 1`, `repository` (canonical absolute root),
+Discovery emits `schemaVersion: 1`; indexing emits `schemaVersion: 2`.
+Both commands emit `repository` (canonical absolute root),
 `status` (`complete` or `partial`), `git`, `projects`, `diagnostics`, and `omissions`.
 Paths and project IDs inside results are repository-relative with forward slashes.
 
@@ -168,8 +170,11 @@ Paths and project IDs inside results are repository-relative with forward slashe
 | --- | --- |
 | Discovery project | `id`, nullable `configPath`, `references`, and config-member `files` (which may include declarations used for resolution) |
 | Indexed project | `id`, nullable `configPath`, `status`, local project `dependencies`, and implementation `files` |
-| Indexed file | `path`, `status`, nullable SHA-256 `contentHash`, `gitState`, `symbols`, `imports`, and file `diagnostics` |
+| Indexed file | `path`, `status`, nullable SHA-256 `contentHash`, `gitState`, `symbols`, `imports`, `relationships`, and file `diagnostics` |
 | Symbol | `name`, `kind` (`function`, `class`, `method`), one-based inclusive `startLine`/`endLine`, excluding leading comments and trailing whitespace |
+| Indexed symbol | Symbol fields plus deterministic `id`, nullable `parentSymbolId`, zero-based UTF-16 `startOffset`, and exclusive `endOffset` |
+| Relationship | `kind` (`imports`, `references`, `calls`), nullable `sourceSymbolId`, `startOffset`/`endOffset`, inclusive `startLine`/`endLine`, `resolution`, nullable `target`, and nullable `reason` |
+| Relationship target | `projectId`, repository-relative `path`, and nullable `symbolId` (null for module/file targets) |
 | Import | Raw `specifier` and one-based inclusive `startLine`/`endLine` |
 | Diagnostic | `code`, `severity`, `message`, with `project`, `path`, `line`, and `column` where available |
 | Omission | `reason`, `affectsCompleteness`, and `project`, `path`, `specifier`, or originating `from` file where known |
@@ -221,7 +226,44 @@ final check results are recorded in the command reference below.
 ### M2 — Code Knowledge Graph
 
 **Owners:** Analyzer for resolution; API for persistence and queries.
-**Technologies:** TypeScript Compiler API or ts-morph, PostgreSQL.
+**Technologies:** TypeScript Compiler API; PostgreSQL planned.
+
+**Implemented analyzer slice:** A second checker pass runs after selective dependency
+discovery, preserving each project's compiler options and captured source bytes.
+Dependency imports and re-exports resolve with their owning project's options,
+including when the importing project defines conflicting path aliases.
+Captured project ownership also applies to reachable implementations absent
+from a configuration's initial file list; ambiguous ownership stays unresolved.
+It uses already selected implementations as resolution context without widening
+the emitted project/file set. The existing Compiler API supports this directly,
+so no additional analysis dependency is needed.
+
+Index schema v2 adds SHA-256 symbol IDs derived from the JSON tuple
+`[projectId, path, kind, startOffset]`. IDs distinguish overlapping project
+contexts within an analysis; they are not stable identities across revisions.
+Standalone `extractSource()` keeps its original declaration contract.
+
+Relationships retain individual source occurrences, ordered by start offset,
+end offset, then kind. Imports/re-exports target files; references and direct
+calls target original declarations through named/default/namespace imports and
+re-export chains. Functions (including named function-valued variables), class
+methods, constructors targeting classes, and overload implementations are supported.
+References remain separate from calls. Unindexed anonymous function bodies have
+no source symbol attribution; indexed nested declarations retain parent IDs.
+
+Only `static` relationships have targets and a null reason. `external`, `dynamic`,
+`unresolved`, and `unsupported` occurrences instead carry a reason and null target.
+Declaration-only targets and excluded dependency-package implementations are
+external; explicitly indexed package implementations retain local graph behavior.
+Callback execution, computed call targets,
+variable-alias data flow, and `.call`/`.apply`/`.bind` behavior are not inferred;
+union/optional call dispatch stays uncertain. Static method resolution identifies
+a declared target without proving runtime dispatch. Malformed files retain
+recovered declarations but contribute no asserted relationships to/from them.
+Supported local resolution failures produce `RELATIONSHIP_UNRESOLVED` diagnostics
+and partial output; expected external/dynamic/unsupported cases do not alone do so.
+Relationships inherit endpoint file hashes/status and the existing baseline Git
+provenance; they do not establish immutable commit evidence.
 
 **What:** Resolve relationships across files, such as `authenticate()` in
 `auth.ts` calling the original `findUser()` declaration in `database.ts`, rather
@@ -232,7 +274,7 @@ nodes and edges, indexed lookups, and recursive queries because the initial grap
 is expected to be small and relational. Add a separate graph database such as
 Neo4j only if measured requirements demonstrate PostgreSQL is insufficient.
 
-**How:** Begin with the following planned storage responsibilities:
+**Remaining storage work:** Begin with the following planned responsibilities:
 
 | Table | Responsibility |
 | --- | --- |
@@ -431,7 +473,7 @@ The lockfile is versioned. The analyzer package also exposes `build`, `test`, `l
 and `typecheck` scripts through `pnpm --filter @acip/analyzer <script>`.
 API/web service commands and database migrations are not configured.
 
-Verified on 2026-11-07:
+Historical M1 verification on 2026-11-07:
 
 - `pnpm install --offline --frozen-lockfile --ignore-scripts` passed using the local cache.
 - `pnpm test` passed all 45 tests, including the compiled CLI and Python consumer.
@@ -440,6 +482,28 @@ Verified on 2026-11-07:
 - `pnpm acip index . --project packages/analyzer/tsconfig.build.json` returned
   a complete index of seven implementation files, no test files, valid Git
   provenance, and no diagnostics or completeness-affecting omissions.
+
+Analyzer M2 verification on 2026-11-11 using Node 22.16.0 and pnpm 10.33.4:
+
+- `pnpm install --frozen-lockfile --ignore-scripts` passed.
+- Focused graph/extraction tests observed red-to-green behavior; the CLI/Python
+  consumer validates schema v2, target integrity, and explicit uncertainty.
+- `pnpm test` passed all 58 tests, including observed failing regressions for
+  external packages, dependency re-exports with conflicting path aliases, and
+  ownership of reachable implementations absent from initial config membership.
+- `pnpm lint`, `pnpm typecheck`, and `pnpm build` passed.
+- `pnpm acip discover .` returned schema v1 and two projects with complete status;
+  `pnpm acip index . --project packages/analyzer/tsconfig.build.json` returned
+  schema v2 with complete status and no diagnostics.
+
+Windows baseline failures were repaired by normalizing TypeScript config paths
+and filesystem output-directory comparisons, invoking the real pnpm script
+through Node, and using filesystem-valid unusual names. Windows link fixtures
+use directory junctions and assert the exact canonical-boundary rejection;
+POSIX retains actual file-symlink and newline-filename coverage. These changes
+keep the same security and Git-state checks without requiring symlink privileges
+or skipping tests. The CLI launcher contract runs through `pnpm test`, which
+supplies the package-manager script path automatically.
 
 Fresh-session instruction discovery has not been checked. In this environment, tests that spawn Git, Node, or Python require
 execution outside the restricted sandbox; ordinary test fixtures remain local.

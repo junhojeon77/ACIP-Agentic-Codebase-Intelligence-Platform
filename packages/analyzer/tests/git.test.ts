@@ -53,12 +53,13 @@ describe('Git provenance', () => {
     initialize(root); const head = commit(root);
     write(root, 'staged.ts', 'export const staged = 1;'); git(root, 'add', 'staged.ts');
     write(root, 'unstaged.ts', 'export const unstaged = 1;');
-    write(root, 'new name\nfile.ts', 'export const fresh = 1;');
+    const unusualName = process.platform === 'win32' ? 'new name café.ts' : 'new name\nfile.ts';
+    write(root, unusualName, 'export const fresh = 1;');
     write(root, 'ignored.ts', 'export const ignored = 1;');
     const result = indexProject(root);
     expect(result.git).toEqual({ available: true, headCommit: head, dirty: true });
     expect(Object.fromEntries(result.projects[0]!.files.map(f => [f.path, f.gitState]))).toEqual({
-      'ignored.ts': 'ignored', 'new name\nfile.ts': 'untracked', 'staged.ts': 'modified', 'unstaged.ts': 'modified',
+      'ignored.ts': 'ignored', [unusualName]: 'untracked', 'staged.ts': 'modified', 'unstaged.ts': 'modified',
     });
   });
 

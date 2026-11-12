@@ -34,7 +34,31 @@ export interface Omission {
   affectsCompleteness: boolean;
 }
 export type GitState = 'tracked-clean' | 'modified' | 'untracked' | 'ignored' | 'unknown';
+export interface IndexedSymbol extends SourceSymbol {
+  id: string;
+  parentSymbolId: string | null;
+  startOffset: number;
+  endOffset: number;
+}
+export interface RelationshipTarget {
+  projectId: string;
+  path: string;
+  symbolId: string | null;
+}
+export interface Relationship {
+  kind: 'imports' | 'references' | 'calls';
+  sourceSymbolId: string | null;
+  startOffset: number;
+  endOffset: number;
+  startLine: number;
+  endLine: number;
+  resolution: 'static' | 'external' | 'dynamic' | 'unresolved' | 'unsupported';
+  target: RelationshipTarget | null;
+  reason: string | null;
+}
 export interface IndexedFile extends Extraction {
+  symbols: IndexedSymbol[];
+  relationships: Relationship[];
   path: string;
   contentHash: string | null;
   gitState: GitState;
@@ -52,7 +76,7 @@ export interface GitProvenance {
   dirty: boolean | null;
 }
 export interface IndexResult {
-  schemaVersion: 1;
+  schemaVersion: 2;
   repository: string;
   status: AnalysisStatus;
   git: GitProvenance;

@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { readGit } from './git.js';
 import { diagnosticFromTs } from './extract.js';
-import { compare, FilePolicy, isImplementation, isJavaScript } from './policy.js';
+import { compare, FilePolicy, isImplementation, isJavaScript, slash } from './policy.js';
 import type { Diagnostic } from './types.js';
 
 export interface Project {
@@ -68,10 +68,10 @@ export function loadWorkspace(repository: string): Workspace {
     const configFile = path.resolve(queue[index]!);
     const id = policy.relative(configFile);
     if (projects.has(id)) continue;
-    const read = ts.readConfigFile(configFile, host.readFile);
+    const read = ts.readConfigFile(slash(configFile), host.readFile);
     const parsed = read.error
       ? { options: {}, fileNames: [], errors: [read.error] } as ts.ParsedCommandLine
-      : ts.parseJsonConfigFileContent(read.config, host, path.dirname(configFile), undefined, configFile);
+      : ts.parseJsonConfigFileContent(read.config, host, slash(path.dirname(configFile)), undefined, slash(configFile));
     // Empty projects and solution configs are valid discovery results.
     const errors = parsed.errors.filter(d => d.code !== 18002 && d.code !== 18003);
     const projectDiagnostics = errors.map(d => ({ ...diagnosticFromTs(d, id), project: id }));

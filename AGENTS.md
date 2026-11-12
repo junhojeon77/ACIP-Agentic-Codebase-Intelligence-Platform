@@ -26,10 +26,14 @@ assumptions with code and tests.
 
 ## Current state and commands
 
-M1 is implemented and verified: 45 tests, lint, type checking, build, a frozen
-lockfile installation, and self-indexing smoke checks pass. API/web applications,
-persistence, and CI remain unimplemented. Do not treat the rest of the selected
-stack as installed. Fresh-session instruction discovery remains unverified.
+M1 and the analyzer slice of M2 are implemented. Indexing emits schema v2 symbol
+identities and relationship occurrences; discovery remains v1. On 2026-11-11,
+58 tests, lint, type checking, build, frozen-lockfile installation, and self-indexing
+smoke checks passed. Windows baseline path/fixture failures were repaired without
+skipping tests; Windows uses junctions for canonical-boundary fixtures while POSIX
+retains file-symlink coverage. M2 persistence/queries, API/web applications, and CI remain
+unimplemented. Do not treat the rest of the selected stack as installed.
+Fresh-session instruction discovery remains unverified.
 
 Run analyzer checks from the workspace root: `pnpm test`, `pnpm lint`,
 `pnpm typecheck`, and `pnpm build`. Tests build first and include local Git and
@@ -47,7 +51,7 @@ checks as passing.
 
 Use the [canonical M1–M7 roadmap](README.md#milestone-roadmap) for ownership,
 deliverables, and completion criteria. M1 is complete for its documented scope;
-M2–M7 are planned. Implement only
+M2's analyzer slice is implemented; persistence/queries and M3–M7 are planned. Implement only
 the current requirement; the roadmap does not authorize speculative features or
 infrastructure. These root instructions apply to all three component directories.
 
@@ -106,6 +110,11 @@ infrastructure. These root instructions apply to all three component directories
 - Keep the versioned JSON contract documented in the root README and verify it
   through actual CLI output consumed by Python. Successful partial runs exit `0`;
   consumers must inspect status, diagnostics, and omissions. Fatal requests exit `1`.
+- Preserve project-qualified schema v2 symbol identities, UTF-16 spans, and
+  per-occurrence imports/references/calls. Resolve only the selected dependency
+  closure with each project's own options; never guess ambiguous targets.
+  Keep dynamic/external/unsupported cases explicit and static resolution separate
+  from runtime certainty. Recovered malformed declarations cannot support edges.
 - Index TypeScript implementation variants; use declaration files only for
   resolution. JavaScript implementation support remains deferred. Preserve
   exclusions/re-inclusions without overriding protected repository boundaries.
@@ -170,8 +179,8 @@ into that setup.
   and service orchestration; uv, Ruff, pytest, and pytest-asyncio.
   Test API validation, response contracts, and error paths, including async behavior
   where relevant.
-- **Code analysis (`packages/analyzer`):** TypeScript Compiler API for M1, with
-  ts-morph considered as needed in M2 for symbol resolution and relationships;
+- **Code analysis (`packages/analyzer`):** TypeScript Compiler API for extraction,
+  symbol resolution, and relationships;
   pnpm, ESLint, and TypeScript checks. Use Vitest with small local repository fixtures to test
   observable analysis results and malformed-input handling. Test the data contracts
   exchanged between the TypeScript analyzer and Python services.

@@ -8,8 +8,9 @@ describe('project discovery', () => {
   it('rejects analyzer configuration symlinks outside the repository boundary', () => {
     const outside = repository({ 'config.json': '{}' });
     const root = repository({});
-    fs.symlinkSync(path.join(outside, 'config.json'), path.join(root, 'acip.config.json'));
-    expect(() => discoverProjects(root)).toThrow(/acip.config.json/);
+    if (process.platform === 'win32') fs.symlinkSync(outside, path.join(root, 'acip.config.json'), 'junction');
+    else fs.symlinkSync(path.join(outside, 'config.json'), path.join(root, 'acip.config.json'));
+    expect(() => discoverProjects(root)).toThrow('acip.config.json must remain inside the repository boundary');
   });
 
   it('discovers configurations and custom references without reading implementation files', () => {
@@ -40,7 +41,7 @@ describe('project discovery', () => {
       'apps/a/src/a.ts': 'export const a = 1;',
       'apps/a/src/skip.ts': 'export const skip = 1;',
     });
-    fs.symlinkSync(path.join(root, 'apps'), path.join(root, 'linked'), 'dir');
+    fs.symlinkSync(path.join(root, 'apps'), path.join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
     const result = discoverProjects(root);
     expect(result.projects.map(p => p.id)).not.toContain('linked/a/tsconfig.json');
     expect(result.projects.find(p => p.id === 'apps/a/tsconfig.json')?.files).toEqual(['apps/a/src/a.ts']);

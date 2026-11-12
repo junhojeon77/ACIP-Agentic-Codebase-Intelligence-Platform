@@ -57,10 +57,11 @@ export class FilePolicy {
   blocked(file: string): boolean { return this.protected(file) || this.protected(this.canonical(file)); }
   excluded(file: string): boolean {
     if (this.blocked(file)) return true;
+    const absolute = path.resolve(file);
     const relative = this.relative(file);
     if (this.includes.some(pattern => pattern.match(relative))) return false;
     return relative.split('/').some(part => defaults.has(part)) ||
-      [...this.outputDirectories].some(dir => file === dir || file.startsWith(dir + path.sep)) ||
+      [...this.outputDirectories].some(dir => absolute === dir || absolute.startsWith(dir + path.sep)) ||
       this.excludes.some(pattern => relative.split('/').some((_, index, parts) => pattern.match(parts.slice(0, index + 1).join('/'))));
   }
   mayReinclude(directory: string): boolean {

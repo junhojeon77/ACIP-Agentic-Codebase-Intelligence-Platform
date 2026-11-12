@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { isBuiltin } from 'node:module';
 import ts from 'typescript';
 import { readGit } from './git.js';
+import { indexedSymbols, resolveRelationships } from './graph.js';
 import { diagnosticFromTs, extractAst, importNodes } from './extract.js';
 import { loadWorkspace, type Project } from './projects.js';
 import { compare, isDeclaration, isImplementation, isJavaScript } from './policy.js';
@@ -116,12 +117,12 @@ export function indexProject(repository: string, projectId?: string): IndexResul
       if (!source) {
         const diagnostic: Diagnostic = { code: 'SOURCE_UNREADABLE', severity: 'error', path: relative, message: 'Cannot read implementation source' };
         addDiagnostic(diagnostic);
-        result.files.push({ path: relative, status: 'partial', contentHash: null, gitState: 'unknown', symbols: [], imports: [], diagnostics: [{ ...diagnostic, project: project.id }] });
+        result.files.push({ path: relative, status: 'partial', contentHash: null, gitState: 'unknown', symbols: [], relationships: [], imports: [], diagnostics: [{ ...diagnostic, project: project.id }] });
         continue;
       }
       const extraction = extractAst(source, program.getSyntacticDiagnostics(source));
       extraction.diagnostics = extraction.diagnostics.map(d => ({ ...d, project: project.id, path: relative }));
-      const indexed: IndexedFile = { ...extraction, path: relative, contentHash: hashContent(snapshots.get(file)!), gitState: 'unknown' };
+      const indexed: IndexedFile = { ...extraction, symbols: indexedSymbols(source, project.id, relative), relationships: [], path: relative, contentHash: hashContent(snapshots.get(file)!), gitState: 'unknown' };
       result.files.push(indexed);
       extraction.diagnostics.forEach(addDiagnostic);
       for (const literal of importNodes(source)) {
@@ -175,6 +176,7 @@ export function indexProject(repository: string, projectId?: string): IndexResul
     result.dependencies.sort(compare);
   }
   const orderedProjects = [...results.values()].sort((a, b) => compare(a.id, b.id));
+  resolveRelationships({ root, projects, results: orderedProjects, snapshots, canonical: file => policy.canonical(file), blocked: file => policy.blocked(file), ownerOf, diagnostics });
   const finalGit = readGit(root, orderedProjects.flatMap(project => project.files.map(file => path.join(root, file.path))));
   const gitChanged = initialGit.signature !== finalGit.signature || initialGit.provenance.available !== finalGit.provenance.available;
   if (gitChanged) {
@@ -198,7 +200,7 @@ export function indexProject(repository: string, projectId?: string): IndexResul
     }
   }
   return {
-    schemaVersion: 1, repository: root,
+    schemaVersion: 2, repository: root,
     status: orderedProjects.some(p => p.status === 'partial') || diagnostics.some(d => d.severity === 'error') ? 'partial' : 'complete',
     git: initialGit.provenance,
     projects: orderedProjects,

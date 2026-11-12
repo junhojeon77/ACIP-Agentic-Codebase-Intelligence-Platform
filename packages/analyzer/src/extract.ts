@@ -32,12 +32,8 @@ export function importNodes(source: ts.SourceFile): ts.StringLiteralLike[] {
   return result;
 }
 
-export function extractAst(source: ts.SourceFile, diagnostics: readonly ts.Diagnostic[] = []): Extraction {
-  const symbols: SourceSymbol[] = [];
-  const lines = (node: ts.Node) => ({
-    startLine: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-    endLine: source.getLineAndCharacterOfPosition(Math.max(node.getStart(source), node.getEnd() - 1)).line + 1,
-  });
+export function declarationNodes(source: ts.SourceFile): { node: ts.Node; name: string; kind: SourceSymbol['kind'] }[] {
+  const declarations: { node: ts.Node; name: string; kind: SourceSymbol['kind'] }[] = [];
   function visit(node: ts.Node) {
     let kind: SourceSymbol['kind'] | undefined;
     let name: ts.Node | undefined;
@@ -51,11 +47,20 @@ export function extractAst(source: ts.SourceFile, diagnostics: readonly ts.Diagn
     }
     if (kind && name && (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) &&
         name.getWidth(source) > 0 && name.text.length > 0 && node.getEnd() > node.getStart(source)) {
-      symbols.push({ name: name.text, kind, ...lines(node) });
+      declarations.push({ node, name: name.text, kind });
     }
     ts.forEachChild(node, visit);
   }
   visit(source);
+  return declarations;
+}
+
+export function extractAst(source: ts.SourceFile, diagnostics: readonly ts.Diagnostic[] = []): Extraction {
+  const lines = (node: ts.Node) => ({
+    startLine: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+    endLine: source.getLineAndCharacterOfPosition(Math.max(node.getStart(source), node.getEnd() - 1)).line + 1,
+  });
+  const symbols: SourceSymbol[] = declarationNodes(source).map(({ node, name, kind }) => ({ name, kind, ...lines(node) }));
   return {
     status: diagnostics.some(d => d.category === ts.DiagnosticCategory.Error) ? 'partial' : 'complete',
     symbols,

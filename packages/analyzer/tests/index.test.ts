@@ -153,16 +153,18 @@ describe('selective project indexing', () => {
 
   it('resolves local workspace symlinks, but never indexes an implementation outside the root', () => {
     const outside = repository({ 'external.ts': 'export function secret() {}' });
+    const externalSpecifier = process.platform === 'win32' ? './external/external' : './external';
     const root = repository({
       'tsconfig.json': config({ files: ['src/a.ts'], compilerOptions: { moduleResolution: 'Bundler', module: 'ESNext' } }),
-      'src/a.ts': 'import "lib"; import "./external";',
+      'src/a.ts': `import "lib"; import "${externalSpecifier}";`,
       'packages/lib/package.json': config({ name: 'lib', types: 'src/lib.ts' }),
       'packages/lib/tsconfig.json': project(),
       'packages/lib/src/lib.ts': 'export function lib() {}',
     });
     fs.mkdirSync(path.join(root, 'node_modules'));
-    fs.symlinkSync(path.join(root, 'packages/lib'), path.join(root, 'node_modules/lib'), 'dir');
-    fs.symlinkSync(path.join(outside, 'external.ts'), path.join(root, 'src/external.ts'));
+    fs.symlinkSync(path.join(root, 'packages/lib'), path.join(root, 'node_modules/lib'), process.platform === 'win32' ? 'junction' : 'dir');
+    if (process.platform === 'win32') fs.symlinkSync(outside, path.join(root, 'src/external'), 'junction');
+    else fs.symlinkSync(path.join(outside, 'external.ts'), path.join(root, 'src/external.ts'));
     const result = indexProject(root);
     expect(result.projects.map(p => p.id)).toEqual(['packages/lib/tsconfig.json', 'tsconfig.json']);
     expect(result.projects.flatMap(p => p.files).some(f => f.path.includes('external'))).toBe(false);
